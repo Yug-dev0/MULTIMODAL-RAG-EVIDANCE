@@ -1,0 +1,1703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multimodal RAG Pipeline - Interactive 3D Showcase</title>
+  <!-- Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <!-- Three.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
+  <style>
+    :root {
+      --bg-dark: #060813;
+      --panel-bg: rgba(10, 15, 30, 0.7);
+      --panel-border: rgba(0, 242, 254, 0.2);
+      --glow-teal: #00f2fe;
+      --glow-amber: #f5af19;
+      --glow-pink: #f953c6;
+      --glow-green: #11998e;
+      --glow-purple: #8e2de2;
+      --text-main: #e2e8f0;
+      --text-muted: #64748b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      font-family: 'Outfit', sans-serif;
+      color: var(--text-main);
+    }
+
+    #webgl-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Scanlines and vignette effects for premium cyber feel */
+    .overlay-vignette {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle, transparent 50%, rgba(3, 4, 9, 0.8) 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .overlay-grid {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: 
+        linear-gradient(rgba(18, 24, 48, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(18, 24, 48, 0.05) 1px, transparent 1px);
+      background-size: 30px 30px;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* UI Layout - HUD overlay */
+    .hud-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 3;
+      pointer-events: none; /* Let clicks pass through to Three.js unless clicking panels */
+      display: grid;
+      grid-template-columns: 360px 1fr 380px;
+      grid-template-rows: 80px 1fr 200px;
+      grid-template-areas: 
+        "header header header"
+        "left center right"
+        "bottom center right";
+      padding: 20px;
+      gap: 20px;
+    }
+
+    .hud-panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 8px;
+      pointer-events: auto; /* Enable interaction on UI panels */
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .hud-panel:hover {
+      border-color: rgba(0, 242, 254, 0.4);
+      box-shadow: 0 8px 32px 0 rgba(0, 242, 254, 0.08);
+    }
+
+    /* Panel Headers */
+    .panel-header {
+      padding: 12px 16px;
+      background: rgba(0, 242, 254, 0.05);
+      border-bottom: 1px solid rgba(0, 242, 254, 0.15);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--glow-teal);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .panel-status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--glow-teal);
+      box-shadow: 0 0 8px var(--glow-teal);
+      animation: pulse 2s infinite;
+    }
+
+    .panel-content {
+      padding: 16px;
+      flex: 1;
+      overflow-y: auto;
+      font-size: 0.9rem;
+    }
+
+    /* Header Panel */
+    header.hud-header {
+      grid-area: header;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(90deg, rgba(6, 8, 19, 0.9) 0%, rgba(10, 15, 30, 0.7) 50%, rgba(6, 8, 19, 0.9) 100%);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 0 24px;
+      pointer-events: auto;
+      backdrop-filter: blur(8px);
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-mark {
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 800;
+      font-size: 1.6rem;
+      background: linear-gradient(135deg, var(--glow-teal) 0%, var(--glow-pink) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -1px;
+    }
+
+    .logo-tag {
+      font-size: 0.7rem;
+      font-family: 'IBM Plex Mono', monospace;
+      background: rgba(0, 242, 254, 0.1);
+      border: 1px solid var(--glow-teal);
+      color: var(--glow-teal);
+      padding: 2px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .header-nav {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .nav-btn {
+      background: transparent;
+      border: 1px solid rgba(226, 232, 240, 0.1);
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .nav-btn:hover, .nav-btn.active {
+      color: var(--glow-teal);
+      border-color: var(--glow-teal);
+      background: rgba(0, 242, 254, 0.05);
+      box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+    }
+
+    .audio-toggle {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.2rem;
+      padding: 8px;
+      transition: color 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .audio-toggle.active {
+      color: var(--glow-pink);
+    }
+
+    /* Left Panel: Control & Modality Ingestion Status */
+    .left-panel {
+      grid-area: left;
+    }
+
+    .modality-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .modality-item {
+      border: 1px solid rgba(226, 232, 240, 0.05);
+      background: rgba(255, 255, 255, 0.01);
+      border-radius: 6px;
+      padding: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .modality-item:hover {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(226, 232, 240, 0.1);
+    }
+
+    .modality-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .modality-badge {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .badge-video { background: rgba(0, 242, 254, 0.1); color: var(--glow-teal); border: 1px solid var(--glow-teal); }
+    .badge-audio { background: rgba(17, 153, 142, 0.1); color: var(--glow-green); border: 1px solid var(--glow-green); }
+    .badge-image { background: rgba(249, 83, 198, 0.1); color: var(--glow-pink); border: 1px solid var(--glow-pink); }
+    .badge-pdf { background: rgba(245, 175, 25, 0.1); color: var(--glow-amber); border: 1px solid var(--glow-amber); }
+
+    .modality-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .modality-signal-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .modality-signal-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      width: 70px;
+    }
+
+    .signal-bars {
+      display: flex;
+      gap: 3px;
+      align-items: flex-end;
+      height: 12px;
+    }
+
+    .signal-bar {
+      width: 4px;
+      height: 100%;
+      background: rgba(226, 232, 240, 0.15);
+      border-radius: 1px;
+      transform-origin: bottom;
+      transition: height 0.3s ease, background-color 0.3s ease;
+    }
+
+    .signal-bar.active {
+      background: var(--glow-teal);
+    }
+
+    /* Right Panel: Provenance & Relationship Inspector */
+    .right-panel {
+      grid-area: right;
+    }
+
+    .inspector-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-main);
+      border-left: 3px solid var(--glow-teal);
+      padding-left: 8px;
+    }
+
+    .metadata-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px 16px;
+      margin-bottom: 16px;
+      background: rgba(226, 232, 240, 0.02);
+      border: 1px solid rgba(226, 232, 240, 0.05);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+    }
+
+    .metadata-label {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .metadata-value {
+      color: var(--text-main);
+      text-align: right;
+    }
+
+    .inspector-body {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 16px;
+      border: 1px dashed rgba(226, 232, 240, 0.1);
+      font-size: 0.85rem;
+      line-height: 1.4;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .inspector-visual-preview {
+      width: 100%;
+      height: 140px;
+      background-color: #0c0f24;
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(226, 232, 240, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .preview-canvas-sim {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      opacity: 0.4;
+    }
+
+    .preview-canvas-box {
+      border: 2px solid var(--glow-pink);
+      position: absolute;
+      box-shadow: 0 0 10px var(--glow-pink);
+      pointer-events: none;
+    }
+
+    /* Bottom Panel: Live Query Solver & Real-time Trace */
+    .bottom-panel {
+      grid-area: bottom;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .query-selector-box {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .query-input {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      border-radius: 4px;
+      color: var(--text-main);
+      padding: 8px 12px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    .query-input:focus {
+      border-color: var(--glow-teal);
+      box-shadow: 0 0 8px rgba(0, 242, 254, 0.2);
+    }
+
+    .query-btn {
+      background: linear-gradient(135deg, var(--glow-teal) 0%, var(--glow-purple) 100%);
+      color: #02040a;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 700;
+      border: none;
+      padding: 0 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .query-btn:hover {
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .query-btn:active {
+      transform: translateY(0);
+    }
+
+    .terminal-trace {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(226, 232, 240, 0.08);
+      border-radius: 4px;
+      padding: 10px;
+      height: 90px;
+      overflow-y: auto;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .terminal-line {
+      margin-bottom: 2px;
+    }
+
+    .terminal-line.active {
+      color: var(--glow-teal);
+    }
+
+    .terminal-line.success {
+      color: var(--glow-green);
+    }
+
+    .terminal-line.amber {
+      color: var(--glow-amber);
+    }
+
+    /* Legend Overlay in Center Area */
+    .legend-overlay {
+      position: absolute;
+      bottom: 20px;
+      left: 390px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 10px 16px;
+      backdrop-filter: blur(8px);
+      pointer-events: auto;
+      display: flex;
+      gap: 16px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      z-index: 3;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot-video { background: var(--glow-teal); box-shadow: 0 0 6px var(--glow-teal); }
+    .dot-audio { background: var(--glow-green); box-shadow: 0 0 6px var(--glow-green); }
+    .dot-pdf { background: var(--glow-amber); box-shadow: 0 0 6px var(--glow-amber); }
+    .dot-entity { background: var(--glow-pink); box-shadow: 0 0 6px var(--glow-pink); }
+    .dot-event { background: var(--glow-purple); box-shadow: 0 0 6px var(--glow-purple); }
+
+    /* Interaction overlay for instructions */
+    .instructions-overlay {
+      position: absolute;
+      top: 100px;
+      left: 390px;
+      pointer-events: none;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      color: rgba(226, 232, 240, 0.4);
+      background: rgba(6, 8, 19, 0.4);
+      border-radius: 4px;
+      padding: 6px 12px;
+    }
+
+    /* Synth Waveform Simulator in Inspector */
+    .waveform-sim {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 10px;
+    }
+
+    .waveform-bar {
+      width: 2px;
+      height: 10%;
+      background: var(--glow-green);
+      border-radius: 1px;
+      animation: soundwave 1.2s ease-in-out infinite alternate;
+    }
+
+    /* Keyframes animations */
+    @keyframes pulse {
+      0% { opacity: 0.4; box-shadow: 0 0 4px var(--glow-teal); }
+      50% { opacity: 1; box-shadow: 0 0 12px var(--glow-teal); }
+      100% { opacity: 0.4; box-shadow: 0 0 4px var(--glow-teal); }
+    }
+
+    @keyframes soundwave {
+      0% { height: 10%; }
+      100% { height: 80%; }
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 242, 254, 0.2);
+      border-radius: 2px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 242, 254, 0.5);
+    }
+
+    @media (max-width: 1100px) {
+      .hud-container {
+        grid-template-columns: 320px 1fr;
+        grid-template-rows: auto auto auto;
+        grid-template-areas: 
+          "header header"
+          "left right"
+          "bottom bottom";
+      }
+      .legend-overlay {
+        position: relative;
+        left: 0;
+        bottom: 0;
+        margin-top: 10px;
+        align-self: flex-start;
+      }
+      .instructions-overlay {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- WebGL Background Canvas -->
+  <div id="webgl-container"></div>
+  <div class="overlay-vignette"></div>
+  <div class="overlay-grid"></div>
+
+  <!-- Instruction Hint -->
+  <div class="instructions-overlay">
+    [DRAG TO ROTATE SCENE] &nbsp;&nbsp;&nbsp;&nbsp; [SCROLL TO ZOOM] &nbsp;&nbsp;&nbsp;&nbsp; [CLICK NODE TO INSPECT PROVENANCE]
+  </div>
+
+  <!-- HUD Grid Layout -->
+  <div class="hud-container">
+    
+    <!-- Top Header -->
+    <header class="hud-header">
+      <div class="logo-container">
+        <span class="logo-mark">YUG</span>
+        <span class="logo-tag">Multimodal RAG Console · By Yug (Maker)</span>
+      </div>
+      <div class="header-nav">
+        <button class="nav-btn active" id="btn-scene-1">DATABASE LOAD QUERY</button>
+        <button class="nav-btn" id="btn-scene-2">INGESTION SCHEMA</button>
+        <button class="audio-toggle" id="audio-btn" title="Toggle Interaction Synth SFX">
+          🔊
+        </button>
+      </div>
+    </header>
+
+    <!-- Left Column: Pipeline Signals & Status -->
+    <div class="hud-panel left-panel">
+      <div class="panel-header">
+        <span class="panel-title">📡 Ingest Modalities</span>
+        <span class="panel-status"></span>
+      </div>
+      <div class="panel-content">
+        <div class="modality-list">
+          <!-- Video Ingestion -->
+          <div class="modality-item" id="mod-video">
+            <div class="modality-meta">
+              <span class="modality-badge badge-video">Video</span>
+              <span class="modality-name">prod_meeting_1080p.mp4</span>
+            </div>
+            <div class="modality-signal-group">
+              <span class="modality-signal-label">Scene Detect</span>
+              <div class="signal-bars" id="sig-scene">
+                <!-- Javascript will populate or animate bars -->
+              </div>
+            </div>
+            <div class="modality-signal-group">
+              <span class="modality-signal-label">Keyframes</span>
+              <div class="signal-bars" id="sig-keyframes"></div>
+            </div>
+          </div>
+
+          <!-- Audio Ingestion -->
+          <div class="modality-item" id="mod-audio">
+            <div class="modality-meta">
+              <span class="modality-badge badge-audio">Audio</span>
+              <span class="modality-name">meeting_mic_ch1.wav</span>
+            </div>
+            <div class="modality-signal-group">
+              <span class="modality-signal-label">ASR Whisper</span>
+              <div class="signal-bars" id="sig-whisper"></div>
+            </div>
+            <div class="modality-signal-group">
+              <span class="modality-signal-label">Diarization</span>
+              <div class="signal-bars" id="sig-diarization"></div>
+            </div>
+          </div>
+
+          <!-- PDF Ingestion -->
+          <div class="modality-item" id="mod-pdf">
+            <div class="modality-meta">
+              <span class="modality-badge badge-pdf">PDF Doc</span>
+              <span class="modality-name">caching_spec_v2.pdf</span>
+            </div>
+            <div class="modality-signal-group">
+              <span class="modality-signal-label">PyMuPDF Text</span>
+              <div class="signal-bars" id="sig-pdf-text"></div>
+            </div>
+            <div class="modality-signal-group">
+              <span class="modality-signal-label">Img Extract</span>
+              <div class="signal-bars" id="sig-pdf-img"></div>
+            </div>
+          </div>
+
+          <!-- Image Ingestion -->
+          <div class="modality-item" id="mod-image">
+            <div class="modality-meta">
+              <span class="modality-badge badge-image">Image</span>
+              <span class="modality-name">architecture_v1.png</span>
+            </div>
+            <div class="modality-signal-group">
+              <span class="modality-signal-label">Tesseract OCR</span>
+              <div class="signal-bars" id="sig-ocr"></div>
+            </div>
+            <div class="modality-signal-group">
+              <span class="modality-signal-label">GPT-4o Vision</span>
+              <div class="signal-bars" id="sig-vision"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Inspector Panel -->
+    <div class="hud-panel right-panel">
+      <div class="panel-header">
+        <span class="panel-title">🔍 Provenance Inspector</span>
+        <span class="panel-status" style="background:#f953c6; box-shadow: 0 0 8px var(--glow-pink);"></span>
+      </div>
+      <div class="panel-content">
+        <div id="inspector-default-msg" style="color:var(--text-muted); font-style:italic; font-size:0.85rem; text-align:center; margin-top:50px;">
+          Click any glowing 3D node in the graph viewport to inspect its exact extraction metadata, confidence scores, and source file coordinates.
+        </div>
+        
+        <div id="inspector-content" style="display:none;">
+          <div class="inspector-title" id="insp-name">Evidence Unit #04</div>
+          
+          <div class="metadata-grid">
+            <span class="metadata-label">SOURCE FILE:</span>
+            <span class="metadata-value" id="insp-source">prod_meeting_1080p.mp4</span>
+            
+            <span class="metadata-label">MODALITY:</span>
+            <span class="metadata-value" id="insp-modality">Speech Segment</span>
+            
+            <span class="metadata-label">TEMPORAL LOC:</span>
+            <span class="metadata-value" id="insp-location">01:24 - 01:45</span>
+            
+            <span class="metadata-label">CONFIDENCE:</span>
+            <span class="metadata-value" id="insp-confidence" style="color:var(--glow-teal); font-weight:bold;">0.982</span>
+            
+            <span class="metadata-label">EXTRACTION:</span>
+            <span class="metadata-value" id="insp-method">Whisper ASR</span>
+          </div>
+
+          <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; letter-spacing:0.05em; margin-bottom:6px; font-family:'IBM Plex Mono',monospace;">Extracted Content</div>
+          <div class="inspector-body" id="insp-body">
+            "Alice: We can introduce a Redis cache layer for the query results to reduce database load..."
+          </div>
+
+          <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; font-weight:700; letter-spacing:0.05em; margin-bottom:6px; font-family:'IBM Plex Mono',monospace;">Modality Render / Visual Evidence</div>
+          <div class="inspector-visual-preview" id="insp-visual">
+            <!-- Simulated image keyframe canvas / waveform -->
+            <div class="waveform-sim" id="insp-waveform">
+              <!-- Waveform bars -->
+            </div>
+            <canvas class="preview-canvas-sim" id="insp-canvas-preview"></canvas>
+            <div class="preview-canvas-box" id="insp-canvas-box"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Column: Query Engine Solver -->
+    <div class="hud-panel bottom-panel">
+      <div class="panel-header">
+        <span class="panel-title">⚡ Cross-Modal Retrieval Query Engine</span>
+        <span class="panel-status" style="background:#f5af19; box-shadow: 0 0 8px var(--glow-amber);"></span>
+      </div>
+      <div class="panel-content" style="padding:12px;">
+        <div class="query-selector-box">
+          <input type="text" class="query-input" id="query-input" value="What architecture was discussed for reducing database load, who explained it, and where was the corresponding diagram shown?" readonly>
+          <button class="query-btn" id="query-solve-btn">Solve & Trace</button>
+        </div>
+        <div class="terminal-trace" id="terminal-trace">
+          <div class="terminal-line">[SYSTEM] RAG pipeline initialized. Ready to execute temporal cross-modal search query.</div>
+          <div class="terminal-line">[SYSTEM] Click 'Solve & Trace' to run the retrieval algorithm simulation.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Legend overlay positioned nicely in center bottom -->
+  <div class="legend-overlay">
+    <div class="legend-item"><span class="legend-dot dot-video"></span><span>Video Keyframe</span></div>
+    <div class="legend-item"><span class="legend-dot dot-audio"></span><span>Whisper Audio</span></div>
+    <div class="legend-item"><span class="legend-dot dot-pdf"></span><span>PDF Spec Page</span></div>
+    <div class="legend-item"><span class="legend-dot dot-entity"></span><span>Resolved Entity</span></div>
+    <div class="legend-item"><span class="legend-dot dot-event"></span><span>Knowledge Event</span></div>
+  </div>
+
+  <!-- Three.js Visual Scene Script -->
+  <script>
+    // Audio Sound Synthesizer via Web Audio API
+    let audioCtx = null;
+    let audioEnabled = false;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playSynthNote(frequency, duration, type = 'sine', volume = 0.05) {
+      if (!audioEnabled) return;
+      initAudio();
+      try {
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+        
+        gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        console.warn("Audio context failed", e);
+      }
+    }
+
+    document.getElementById('audio-btn').addEventListener('click', (e) => {
+      audioEnabled = !audioEnabled;
+      e.target.classList.toggle('active');
+      if (audioEnabled) {
+        initAudio();
+        e.target.innerText = '🔊';
+        playSynthNote(440, 0.1, 'sine', 0.1);
+        setTimeout(() => playSynthNote(880, 0.15, 'sine', 0.05), 100);
+      } else {
+        e.target.innerText = '🔇';
+      }
+    });
+
+    // Populate Modality Ingestion Meter signals
+    function makeSignalBars(containerId, count, maxVal) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      el.innerHTML = '';
+      for (let i = 0; i < count; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'signal-bar active';
+        const heightPercent = Math.floor(Math.random() * (maxVal - 20) + 20);
+        bar.style.height = `${heightPercent}%`;
+        // Subtle animate delay
+        bar.style.animation = `soundwave ${Math.random() * 2 + 1}s ease-in-out infinite alternate`;
+        el.appendChild(bar);
+      }
+    }
+
+    function initModalitySignals() {
+      makeSignalBars('sig-scene', 12, 100);
+      makeSignalBars('sig-keyframes', 12, 80);
+      makeSignalBars('sig-whisper', 12, 95);
+      makeSignalBars('sig-diarization', 12, 70);
+      makeSignalBars('sig-pdf-text', 12, 90);
+      makeSignalBars('sig-pdf-img', 12, 60);
+      makeSignalBars('sig-ocr', 12, 85);
+      makeSignalBars('sig-vision', 12, 75);
+    }
+    initModalitySignals();
+
+    // Inspector Waveform Generator
+    const waveformContainer = document.getElementById('insp-waveform');
+    for (let i = 0; i < 30; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'waveform-bar';
+      bar.style.animationDelay = `${i * 0.04}s`;
+      waveformContainer.appendChild(bar);
+    }
+
+    // Node Mock Database representing the cross-modal graph
+    const nodesDatabase = {
+      // Scene 1: Database Load Query Resolution Path
+      scene1: [
+        {
+          id: 'speech_alice',
+          name: 'Whisper Segment #12',
+          modality: 'Audio Speech',
+          source: 'prod_meeting_1080p.mp4',
+          location: '01:24 - 01:45',
+          confidence: '0.985',
+          method: 'Whisper ASR + Diarizer',
+          body: 'Alice (Architect): "We can introduce a Redis cache layer in front of the PostgreSQL primary. This should take care of 80% of our query reads and reduce database load significantly."',
+          color: 0x11998e,
+          position: new THREE.Vector3(-25, 10, -5),
+          previewType: 'audio'
+        },
+        {
+          id: 'slide_caching',
+          name: 'Video Keyframe @01:24',
+          modality: 'Video Scene Keyframe',
+          source: 'prod_meeting_1080p.mp4',
+          location: 'Timestamp 01:24',
+          confidence: '0.941',
+          method: 'PySceneDetect + OpenCV',
+          body: 'Visual slide depicting: "Architecture Proposal: Redis Cache Deployment Layout". Contains box diagram with connections between API Gateways, Redis Cluster, and PostgreSQL Primary DB.',
+          color: 0x00f2fe,
+          position: new THREE.Vector3(-25, -10, 15),
+          previewType: 'canvas',
+          box: { left: 40, top: 20, width: 80, height: 60, text: 'REDIS CLUSTER' }
+        },
+        {
+          id: 'ocr_redis',
+          name: 'OCR Extract [REDIS]',
+          modality: 'OCR Bounding Box',
+          source: 'prod_meeting_1080p.mp4 [Frame 2520]',
+          location: 'Slide Bbox [L:120, T:250, W:90, H:40]',
+          confidence: '0.970',
+          method: 'Tesseract OCR',
+          body: 'Extracted string content: "REDIS CACHE LAYER (CLUSTER)". Matches schema vocabulary for caching node verification.',
+          color: 0xf953c6,
+          position: new THREE.Vector3(-10, -20, 10),
+          previewType: 'canvas',
+          box: { left: 120, top: 250, width: 90, height: 40, text: 'REDIS' }
+        },
+        {
+          id: 'entity_redis',
+          name: 'Entity: Redis Cache',
+          modality: 'Canonical Resolved Entity',
+          source: 'Cross-Modal Global Dictionary',
+          location: 'Global Scope',
+          confidence: '0.999',
+          method: 'LLM Entity Linking + Embedding Merger',
+          body: 'Core entity reference: Redis Cache (aliases: "Redis", "Redis layer", "caching system"). Connected to multiple meeting segments and design documents.',
+          color: 0xf953c6,
+          position: new THREE.Vector3(5, 5, 0),
+          previewType: 'none'
+        },
+        {
+          id: 'entity_postgres',
+          name: 'Entity: PostgreSQL Primary',
+          modality: 'Canonical Resolved Entity',
+          source: 'Cross-Modal Global Dictionary',
+          location: 'Global Scope',
+          confidence: '0.999',
+          method: 'LLM Entity Linking + Embedding Merger',
+          body: 'Core entity reference: PostgreSQL Database (aliases: "Postgres", "PG database", "postgres primary"). Connected to scale-out requirements.',
+          color: 0xf953c6,
+          position: new THREE.Vector3(5, -15, -10),
+          previewType: 'none'
+        },
+        {
+          id: 'pdf_spec_p4',
+          name: 'caching_spec_v2.pdf (Page 4)',
+          modality: 'PDF Document Text',
+          source: 'caching_spec_v2.pdf',
+          location: 'Page 4, Section 3.2',
+          confidence: '1.000',
+          method: 'PyMuPDF Text Extractor',
+          body: 'Specification Text: "3.2 Cache Eviction and Redis Sizing. For database load reduction, the Redis cluster will hold serialized read models with a Time-To-Live (TTL) of 3600 seconds. Read queries must query cache first before falling back to the Postgres primary database instance."',
+          color: 0xf5af19,
+          position: new THREE.Vector3(25, 15, -20),
+          previewType: 'pdf'
+        },
+        {
+          id: 'event_load_reduction',
+          name: 'Event: DB Load Reduction Proposal',
+          modality: 'Knowledge Event Node',
+          source: 'Temporal Context Window #02',
+          location: 'Timeline 01:20 - 02:10',
+          confidence: '0.952',
+          method: 'Multi-Evidence Graph Aggregation',
+          body: 'Knowledge event reconstructing the architectural decision to introduce Redis caching. Binds Alice\'s verbal statement, the slide diagram frame showing the Redis deployment layout, and the caching PDF specs into a unified structural representation.',
+          color: 0x8e2de2,
+          position: new THREE.Vector3(0, 20, 10),
+          previewType: 'none'
+        },
+        {
+          id: 'speech_bob',
+          name: 'Whisper Segment #13',
+          modality: 'Audio Speech',
+          source: 'prod_meeting_1080p.mp4',
+          location: '01:46 - 02:05',
+          confidence: '0.968',
+          method: 'Whisper ASR + Diarizer',
+          body: 'Bob (DBA): "Agree on cache, but we also need read replicas for heavy analytics queries that bypass caching entirely. Let\'s make sure we document the synchronization lag limitations."',
+          color: 0x11998e,
+          position: new THREE.Vector3(20, -5, 20),
+          previewType: 'audio'
+        },
+        {
+          id: 'pdf_spec_p7',
+          name: 'caching_spec_v2.pdf (Page 7)',
+          modality: 'PDF Document Text',
+          source: 'caching_spec_v2.pdf',
+          location: 'Page 7, Section 4.1',
+          confidence: '1.000',
+          method: 'PyMuPDF Text Extractor',
+          body: 'Specification Text: "4.1 Read Replica Failover. Postgres read replicas will run asynchronously. Maximum replica lag is configured at 500ms. Analytical clients should tolerate eventual consistency when executing large table scans against these read endpoints."',
+          color: 0xf5af19,
+          position: new THREE.Vector3(35, -15, 5),
+          previewType: 'pdf'
+        }
+      ],
+
+      // Scene 2: Generalized Pipeline Ingestion Schema Graph
+      scene2: [
+        { id: 'ing_raw_video', name: 'Raw Video Source', modality: 'File Node', source: 'prod_meeting_1080p.mp4', location: 'Root Input', confidence: '1.000', method: 'User Ingestion', body: 'Raw high-definition meeting video file containing mixed visual layouts, speaker changes, audio waveforms, slides, and code screens.', color: 0x00f2fe, position: new THREE.Vector3(-40, 0, 0), previewType: 'none' },
+        { id: 'ing_scenedetect', name: 'Scene Detection', modality: 'Pipeline Processor', source: 'Internal Code', location: 'Step 1', confidence: '0.920', method: 'PySceneDetect API', body: 'Computes frame differences and splits video into distinct visual scenes (cuts/thresholds) to identify keyframe moments.', color: 0x8e2de2, position: new THREE.Vector3(-20, 15, 10), previewType: 'none' },
+        { id: 'ing_ffmpeg', name: 'FFmpeg Audio Extract', modality: 'Pipeline Processor', source: 'Internal Code', location: 'Step 1', confidence: '1.000', method: 'ffmpeg-python wrapper', body: 'Demuxes the audio channel into single-channel 16kHz WAV format suitable for speech-to-text models.', color: 0x8e2de2, position: new THREE.Vector3(-20, -15, -10), previewType: 'none' },
+        { id: 'ing_whisper', name: 'Whisper Transcriber', modality: 'AI Foundation Model', source: 'OpenAI Whisper API', location: 'Step 2', confidence: '0.978', method: 'OpenAI Whisper-v3', body: 'Converts demuxed audio into timestamped words and phrases. Performs auto-language detection and segments by acoustic pauses.', color: 0x11998e, position: new THREE.Vector3(0, -20, -20), previewType: 'none' },
+        { id: 'ing_pyannote', name: 'Speaker Diarizer', modality: 'AI Foundation Model', source: 'HuggingFace Space', location: 'Step 2', confidence: '0.880', method: 'pyannote/speaker-diarization-3.1', body: 'Clusters speech segments by acoustic embedding similarities to identify who spoke when ("Speaker 0", "Speaker 1").', color: 0x11998e, position: new THREE.Vector3(0, -10, 0), previewType: 'none' },
+        { id: 'ing_tesseract', name: 'OCR Text Extractor', modality: 'Pipeline Processor', source: 'Tesseract OCR v5', location: 'Step 2', confidence: '0.940', method: 'pytesseract + PIL', body: 'Analyzes visual scene keyframe layout. Detects bounding boxes for words and outputs dictionary metadata including bounding coordinates and confidence.', color: 0x00f2fe, position: new THREE.Vector3(0, 15, 20), previewType: 'none' },
+        { id: 'ing_gpt4_vision', name: 'VLM Scene Captioner', modality: 'AI Foundation Model', source: 'OpenAI GPT-4o-mini', location: 'Step 2', confidence: '0.960', method: 'GPT-4o Structured Output', body: 'Generates high-fidelity summaries of keyframe diagrams. Resolves flow charts, tables, code blocks, and context not extractable by raw text OCR.', color: 0x00f2fe, position: new THREE.Vector3(0, 25, -10), previewType: 'none' },
+        { id: 'ing_vector', name: 'pgvector Storage', modality: 'Database Sink', source: 'PostgreSQL Database', location: 'Step 3', confidence: '1.000', method: 'SQLAlchemy / pgvector', body: 'Stores high-dimensional embeddings of all extracted EvidenceUnits (transcripts, OCR, captions, text sections) for semantic similarity lookup.', color: 0xf5af19, position: new THREE.Vector3(30, -5, -15), previewType: 'none' },
+        { id: 'ing_neo4j', name: 'Neo4j Graph Database', modality: 'Database Sink', source: 'Neo4j Property Graph', location: 'Step 3', confidence: '1.000', method: 'Bolt driver', body: 'Mirrors resolved entities, cross-modal linking relationships, and events. Computes paths between multimodal evidence during retrieval.', color: 0xf5af19, position: new THREE.Vector3(30, 10, 15), previewType: 'none' }
+      ]
+    };
+
+    // Edges Database mapping connections
+    const edgesDatabase = {
+      scene1: [
+        { source: 'speech_alice', target: 'event_load_reduction', label: 'supports', type: 'evidence' },
+        { source: 'slide_caching', target: 'event_load_reduction', label: 'depicts', type: 'evidence' },
+        { source: 'pdf_spec_p4', target: 'event_load_reduction', label: 'specifies', type: 'evidence' },
+        { source: 'slide_caching', target: 'speech_alice', label: 'corresponds_to', type: 'temporal' },
+        { source: 'slide_caching', target: 'ocr_redis', label: 'contains_ocr', type: 'component' },
+        { source: 'ocr_redis', target: 'entity_redis', label: 'references', type: 'semantic' },
+        { source: 'speech_alice', target: 'entity_redis', label: 'discusses', type: 'semantic' },
+        { source: 'speech_alice', target: 'entity_postgres', label: 'discusses', type: 'semantic' },
+        { source: 'pdf_spec_p4', target: 'entity_redis', label: 'defines', type: 'semantic' },
+        { source: 'pdf_spec_p4', target: 'entity_postgres', label: 'defines', type: 'semantic' },
+        
+        { source: 'speech_bob', target: 'entity_postgres', label: 'discusses', type: 'semantic' },
+        { source: 'pdf_spec_p7', target: 'entity_postgres', label: 'defines', type: 'semantic' },
+        { source: 'speech_bob', target: 'pdf_spec_p7', label: 'corresponds_to', type: 'temporal' },
+        { source: 'speech_bob', target: 'speech_alice', label: 'elaborates_on', type: 'logical' }
+      ],
+      scene2: [
+        { source: 'ing_raw_video', target: 'ing_scenedetect', label: 'sends_visual', type: 'flow' },
+        { source: 'ing_raw_video', target: 'ing_ffmpeg', label: 'sends_audio', type: 'flow' },
+        { source: 'ing_ffmpeg', target: 'ing_whisper', label: 'processes', type: 'flow' },
+        { source: 'ing_ffmpeg', target: 'ing_pyannote', label: 'processes', type: 'flow' },
+        { source: 'ing_scenedetect', target: 'ing_tesseract', label: 'processes', type: 'flow' },
+        { source: 'ing_scenedetect', target: 'ing_gpt4_vision', label: 'processes', type: 'flow' },
+        
+        { source: 'ing_whisper', target: 'ing_vector', label: 'stores_embedding', type: 'flow' },
+        { source: 'ing_tesseract', target: 'ing_vector', label: 'stores_embedding', type: 'flow' },
+        { source: 'ing_gpt4_vision', target: 'ing_vector', label: 'stores_embedding', type: 'flow' },
+        
+        { source: 'ing_whisper', target: 'ing_neo4j', label: 'updates_nodes', type: 'flow' },
+        { source: 'ing_pyannote', target: 'ing_neo4j', label: 'updates_edges', type: 'flow' },
+        { source: 'ing_tesseract', target: 'ing_neo4j', label: 'updates_edges', type: 'flow' }
+      ]
+    };
+
+    // ----------------------------------------------------
+    // THREE.JS IMPLEMENTATION
+    // ----------------------------------------------------
+    let scene, camera, renderer;
+    let threeNodes = [];
+    let threeLines = [];
+    let particles = [];
+    let activeSceneKey = 'scene1';
+    let hoveredNode = null;
+    let selectedNode = null;
+    let raycaster, mouse;
+    
+    // Camera Orbit Controls State
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    let cameraRotation = { theta: 0, phi: Math.PI / 2.5, radius: 65 };
+
+    function initThree() {
+      const container = document.getElementById('webgl-container');
+      
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x060813, 0.015);
+      
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      updateCameraPosition();
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setClearColor(0x060813, 1);
+      container.appendChild(renderer.domElement);
+
+      // Light setup
+      const ambientLight = new THREE.AmbientLight(0x223344, 1.2);
+      scene.add(ambientLight);
+
+      const dirLight1 = new THREE.DirectionalLight(0x00f2fe, 1.5);
+      dirLight1.position.set(50, 100, 50);
+      scene.add(dirLight1);
+
+      const dirLight2 = new THREE.DirectionalLight(0xf953c6, 0.8);
+      dirLight2.position.set(-50, -50, -50);
+      scene.add(dirLight2);
+
+      // Add a nice cybernetic grid floor
+      const gridHelper = new THREE.GridHelper(120, 40, 0x00f2fe, 0x121830);
+      gridHelper.position.y = -35;
+      gridHelper.material.opacity = 0.15;
+      gridHelper.material.transparent = true;
+      scene.add(gridHelper);
+
+      // Raycasting setup
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+
+      // Load graph nodes
+      loadGraph(activeSceneKey);
+
+      // Mouse drag controls for rotation
+      window.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.hud-panel') || e.target.closest('.legend-overlay') || e.target.closest('.header-nav')) return;
+        isDragging = true;
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        // Handle Camera Rotate
+        if (isDragging) {
+          const deltaX = e.clientX - previousMousePosition.x;
+          const deltaY = e.clientY - previousMousePosition.y;
+
+          cameraRotation.theta -= deltaX * 0.005;
+          cameraRotation.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraRotation.phi - deltaY * 0.005));
+
+          previousMousePosition = { x: e.clientX, y: e.clientY };
+          updateCameraPosition();
+        }
+
+        // Handle Raycasting mouse coordinates
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      });
+
+      window.addEventListener('mouseup', () => {
+        isDragging = false;
+      });
+
+      // Mouse wheel zoom
+      window.addEventListener('wheel', (e) => {
+        if (e.target.closest('.hud-panel') || e.target.closest('.legend-overlay')) return;
+        cameraRotation.radius = Math.max(20, Math.min(180, cameraRotation.radius + e.deltaY * 0.05));
+        updateCameraPosition();
+      });
+
+      // Handle Click selection
+      window.addEventListener('click', (e) => {
+        if (e.target.closest('.hud-panel') || e.target.closest('.legend-overlay') || e.target.closest('.header-nav')) return;
+        
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(threeNodes);
+
+        if (intersects.length > 0) {
+          const nodeMesh = intersects[0].object;
+          selectNode(nodeMesh.userData);
+        }
+      });
+
+      // Handle Window Resize
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // Start animation loop
+      animate();
+    }
+
+    function updateCameraPosition() {
+      camera.position.x = cameraRotation.radius * Math.sin(cameraRotation.phi) * Math.sin(cameraRotation.theta);
+      camera.position.y = cameraRotation.radius * Math.cos(cameraRotation.phi);
+      camera.position.z = cameraRotation.radius * Math.sin(cameraRotation.phi) * Math.cos(cameraRotation.theta);
+      camera.lookAt(0, 0, 0);
+    }
+
+    function clearGraph() {
+      // Clean nodes
+      threeNodes.forEach(mesh => scene.remove(mesh));
+      threeNodes = [];
+      
+      // Clean lines
+      threeLines.forEach(line => scene.remove(line));
+      threeLines = [];
+
+      // Clean particles
+      particles = [];
+    }
+
+    function loadGraph(sceneKey) {
+      clearGraph();
+      
+      const nodesData = nodesDatabase[sceneKey];
+      const edgesData = edgesDatabase[sceneKey];
+
+      // 1. Create Node Meshes
+      nodesData.forEach(data => {
+        // Emissive sphere representing the evidence chunk
+        const geo = new THREE.SphereGeometry(1.6, 24, 24);
+        const mat = new THREE.MeshStandardMaterial({
+          color: data.color,
+          emissive: data.color,
+          emissiveIntensity: 0.8,
+          roughness: 0.1,
+          metalness: 0.1
+        });
+        
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(data.position);
+        mesh.userData = data;
+        
+        // Add a secondary glow outer ring
+        const glowGeo = new THREE.RingGeometry(2.0, 2.3, 16);
+        const glowMat = new THREE.MeshBasicMaterial({
+          color: data.color,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.25
+        });
+        const glowRing = new THREE.Mesh(glowGeo, glowMat);
+        mesh.add(glowRing);
+        
+        scene.add(mesh);
+        threeNodes.push(mesh);
+      });
+
+      // 2. Create Connective Edges
+      edgesData.forEach(edge => {
+        const sourceNode = nodesData.find(n => n.id === edge.source);
+        const targetNode = nodesData.find(n => n.id === edge.target);
+        
+        if (sourceNode && targetNode) {
+          const points = [sourceNode.position, targetNode.position];
+          const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+          
+          // Connective wires are thin glowing lines
+          const lineMat = new THREE.LineBasicMaterial({
+            color: 0x485563,
+            transparent: true,
+            opacity: 0.3
+          });
+          
+          const line = new THREE.Line(lineGeo, lineMat);
+          line.userData = edge;
+          
+          scene.add(line);
+          threeLines.push(line);
+
+          // Add animated dynamic signal particles along these relationships
+          createEdgeParticle(sourceNode.position, targetNode.position, edge.type);
+        }
+      });
+    }
+
+    function createEdgeParticle(startPos, endPos, type) {
+      // Small glowing spheres that travel the edges
+      const particleGeo = new THREE.SphereGeometry(0.35, 8, 8);
+      let color = 0x00f2fe; // default
+      if (type === 'temporal') color = 0x11998e;
+      if (type === 'semantic') color = 0xf953c6;
+      if (type === 'logical') color = 0x8e2de2;
+      
+      const particleMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.8
+      });
+      
+      const particle = new THREE.Mesh(particleGeo, particleMat);
+      scene.add(particle);
+      
+      particles.push({
+        mesh: particle,
+        start: startPos,
+        end: endPos,
+        t: Math.random(), // Random starting offset
+        speed: 0.005 + Math.random() * 0.005
+      });
+    }
+
+    // Node interactive selection
+    function selectNode(data) {
+      selectedNode = data;
+      playSynthNote(660, 0.1, 'triangle', 0.05);
+      setTimeout(() => playSynthNote(990, 0.15, 'sine', 0.04), 80);
+
+      // Hide default message, display inspector content
+      document.getElementById('inspector-default-msg').style.display = 'none';
+      document.getElementById('inspector-content').style.display = 'block';
+
+      // Populate elements
+      document.getElementById('insp-name').innerText = data.name;
+      document.getElementById('insp-source').innerText = data.source;
+      document.getElementById('insp-modality').innerText = data.modality;
+      document.getElementById('insp-location').innerText = data.location;
+      document.getElementById('insp-confidence').innerText = data.confidence;
+      document.getElementById('insp-method').innerText = data.method;
+      document.getElementById('insp-body').innerText = data.body;
+
+      // Handle custom widgets
+      const canvasPreview = document.getElementById('insp-canvas-preview');
+      const canvasBox = document.getElementById('insp-canvas-box');
+      const waveformWidget = document.getElementById('insp-waveform');
+      
+      // Reset displays
+      canvasPreview.style.display = 'none';
+      canvasBox.style.display = 'none';
+      waveformWidget.style.display = 'none';
+
+      if (data.previewType === 'audio') {
+        waveformWidget.style.display = 'flex';
+      } else if (data.previewType === 'canvas' || data.previewType === 'pdf') {
+        canvasPreview.style.display = 'block';
+        const ctx = canvasPreview.getContext('2d');
+        ctx.clearRect(0, 0, canvasPreview.width, canvasPreview.height);
+        
+        // Render a simulated visual slide or page
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, canvasPreview.width, canvasPreview.height);
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1;
+        
+        // Draw grid
+        for (let i = 0; i < canvasPreview.width; i += 20) {
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvasPreview.height); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvasPreview.width, i); ctx.stroke();
+        }
+
+        if (data.previewType === 'canvas') {
+          // Slide simulated rendering
+          ctx.fillStyle = '#00f2fe';
+          ctx.font = 'bold 12px IBM Plex Mono';
+          ctx.fillText('ARCHITECTURE PROPOSAL: SCALE OUT', 10, 25);
+          
+          ctx.strokeStyle = '#00f2fe';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(30, 45, 80, 50);
+          ctx.strokeRect(180, 45, 80, 50);
+          
+          ctx.fillStyle = '#e2e8f0';
+          ctx.font = '8px IBM Plex Mono';
+          ctx.fillText('API GATEWAY', 38, 72);
+          ctx.fillText('POSTGRES DB', 188, 72);
+          
+          // Draw connection
+          ctx.beginPath();
+          ctx.moveTo(110, 70);
+          ctx.lineTo(180, 70);
+          ctx.stroke();
+
+          // If Bbox exists
+          if (data.box) {
+            canvasBox.style.display = 'block';
+            canvasBox.style.left = `${data.box.left}px`;
+            canvasBox.style.top = `${data.box.top}px`;
+            canvasBox.style.width = `${data.box.width}px`;
+            canvasBox.style.height = `${data.box.height}px`;
+          }
+        } else {
+          // PDF Simulated Page rendering
+          ctx.fillStyle = '#f5af19';
+          ctx.font = 'bold 12px IBM Plex Mono';
+          ctx.fillText('SYSTEM DESIGN DOCUMENT v2.4', 15, 25);
+          
+          ctx.fillStyle = '#64748b';
+          ctx.fillRect(15, 45, 270, 4);
+          ctx.fillRect(15, 55, 250, 4);
+          ctx.fillRect(15, 65, 260, 4);
+          ctx.fillRect(15, 75, 180, 4);
+        }
+      }
+
+      // Highlight the clicked mesh in 3D scene (make it scale up slightly)
+      threeNodes.forEach(mesh => {
+        if (mesh.userData.id === data.id) {
+          mesh.scale.set(1.4, 1.4, 1.4);
+          mesh.material.emissiveIntensity = 2.0;
+        } else {
+          mesh.scale.set(1.0, 1.0, 1.0);
+          mesh.material.emissiveIntensity = 0.8;
+        }
+      });
+    }
+
+    // Nav Switch Event Handler
+    document.getElementById('btn-scene-1').addEventListener('click', (e) => {
+      document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+      e.target.classList.add('active');
+      activeSceneKey = 'scene1';
+      loadGraph('scene1');
+      playSynthNote(523.25, 0.15, 'triangle', 0.05); // C5 note
+      
+      // Reset Inspector
+      document.getElementById('inspector-default-msg').style.display = 'block';
+      document.getElementById('inspector-content').style.display = 'none';
+      
+      // Reset Trace console
+      document.getElementById('terminal-trace').innerHTML = `
+        <div class="terminal-line">[SYSTEM] Switched to scene graph 'DATABASE LOAD QUERY'.</div>
+        <div class="terminal-line">[SYSTEM] Node database holds 9 evidence units, entities, and events.</div>
+      `;
+    });
+
+    document.getElementById('btn-scene-2').addEventListener('click', (e) => {
+      document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+      e.target.classList.add('active');
+      activeSceneKey = 'scene2';
+      loadGraph('scene2');
+      playSynthNote(587.33, 0.15, 'triangle', 0.05); // D5 note
+      
+      // Reset Inspector
+      document.getElementById('inspector-default-msg').style.display = 'block';
+      document.getElementById('inspector-content').style.display = 'none';
+
+      // Reset Trace console
+      document.getElementById('terminal-trace').innerHTML = `
+        <div class="terminal-line">[SYSTEM] Switched to scene graph 'INGESTION SCHEMA'.</div>
+        <div class="terminal-line">[SYSTEM] Visualizing ingestion pipeline flow mapping input to Postgres/Neo4j.</div>
+      `;
+    });
+
+    // ----------------------------------------------------
+    // RETRIEVAL QUERY SIMULATION TRACE ALGORITHM
+    // ----------------------------------------------------
+    const querySteps = [
+      {
+        line: '[RAG-ENGINE] Parsing NLP query intent: Entity search on [database load reduction], [architecture diagrams], [explainers].',
+        duration: 800,
+        synth: { freq: 440, type: 'sine', vol: 0.05 },
+        highlightNodes: []
+      },
+      {
+        line: '[pgvector] Vector similarity query launched against EvidenceUnit table. Similarity thresholds set at >0.78.',
+        duration: 900,
+        synth: { freq: 493.88, type: 'triangle', vol: 0.04 },
+        highlightNodes: []
+      },
+      {
+        line: '[pgvector] Match found: speech_alice (Whisper Segment #12, cosine similarity 0.841) discusses "Redis cache layer... reduce database load".',
+        duration: 1200,
+        synth: { freq: 659.25, type: 'sine', vol: 0.06 },
+        highlightNodes: ['speech_alice']
+      },
+      {
+        line: '[Neo4j] Traversing graph relationships from [speech_alice]: moving through (corresponds_to) edge to timestamp matched keyframe.',
+        duration: 1200,
+        synth: { freq: 783.99, type: 'triangle', vol: 0.04 },
+        highlightNodes: ['speech_alice', 'slide_caching']
+      },
+      {
+        line: '[OCR-ENGINE] OCR verification loaded for frame @01:24. Found tag [REDIS] in Slide Bounding Box L:120, T:250.',
+        duration: 1100,
+        synth: { freq: 880, type: 'sine', vol: 0.05 },
+        highlightNodes: ['speech_alice', 'slide_caching', 'ocr_redis']
+      },
+      {
+        line: '[Neo4j] Traversing graph relationships: linking speech/OCR observations to globally resolved entity: [Entity: Redis Cache].',
+        duration: 1300,
+        synth: { freq: 987.77, type: 'triangle', vol: 0.04 },
+        highlightNodes: ['speech_alice', 'slide_caching', 'ocr_redis', 'entity_redis']
+      },
+      {
+        line: '[Neo4j] Entity [Entity: Redis Cache] points to static document: pdf_spec_p4 (caching_spec_v2.pdf page 4 - defines cache eviction details).',
+        duration: 1200,
+        synth: { freq: 1174.66, type: 'sine', vol: 0.05 },
+        highlightNodes: ['speech_alice', 'slide_caching', 'ocr_redis', 'entity_redis', 'pdf_spec_p4']
+      },
+      {
+        line: '[CROSS-MODAL] Consolidated Knowledge Event assembled: Event #02 (DB Load Reduction Proposal) binds Audio, Video, OCR, and PDF Spec.',
+        duration: 1400,
+        synth: { freq: 1318.51, type: 'triangle', vol: 0.06 },
+        highlightNodes: ['speech_alice', 'slide_caching', 'ocr_redis', 'entity_redis', 'pdf_spec_p4', 'event_load_reduction']
+      },
+      {
+        line: '[SUCCESS] Answer synthesized successfully citing combined cross-modal provenance: Whisper audio segment #12 (Alice), video keyframe slide @01:24, and caching spec PDF page 4!',
+        duration: 1800,
+        synth: { freq: 1567.98, type: 'sine', vol: 0.07 },
+        highlightNodes: ['speech_alice', 'slide_caching', 'ocr_redis', 'entity_redis', 'pdf_spec_p4', 'event_load_reduction']
+      }
+    ];
+
+    let queryStepIdx = 0;
+    let queryTimer = null;
+
+    document.getElementById('query-solve-btn').addEventListener('click', () => {
+      // Force change to Scene 1 if in Scene 2
+      if (activeSceneKey !== 'scene1') {
+        document.getElementById('btn-scene-1').click();
+      }
+
+      // Reset trace console
+      const traceConsole = document.getElementById('terminal-trace');
+      traceConsole.innerHTML = '';
+      
+      queryStepIdx = 0;
+      if (queryTimer) clearTimeout(queryTimer);
+      
+      runNextQueryStep();
+    });
+
+    function runNextQueryStep() {
+      if (queryStepIdx >= querySteps.length) {
+        // Finished
+        playSynthNote(1046.50, 0.3, 'sine', 0.08); // high C6 success ring
+        setTimeout(() => playSynthNote(1318.51, 0.4, 'sine', 0.04), 150);
+        return;
+      }
+
+      const step = querySteps[queryStepIdx];
+      const traceConsole = document.getElementById('terminal-trace');
+      
+      // Create line
+      const lineEl = document.createElement('div');
+      lineEl.className = 'terminal-line active';
+      if (step.line.startsWith('[SUCCESS]')) {
+        lineEl.className = 'terminal-line success';
+      } else if (step.line.startsWith('[OCR-ENGINE]') || step.line.startsWith('[Neo4j]')) {
+        lineEl.className = 'terminal-line amber';
+      }
+      lineEl.innerText = step.line;
+      traceConsole.appendChild(lineEl);
+      traceConsole.scrollTop = traceConsole.scrollHeight;
+
+      // Clean active styling on previous lines
+      const childs = traceConsole.children;
+      for (let i = 0; i < childs.length - 1; i++) {
+        childs[i].classList.remove('active');
+      }
+
+      // Play Sound
+      playSynthNote(step.synth.freq, 0.15, step.synth.type, step.synth.vol);
+
+      // Highlight corresponding nodes in 3D Space
+      threeNodes.forEach(mesh => {
+        const isHighlight = step.highlightNodes.includes(mesh.userData.id);
+        if (isHighlight) {
+          mesh.scale.set(1.5, 1.5, 1.5);
+          mesh.material.emissiveIntensity = 2.5;
+          // Trigger outer ring glow increase
+          mesh.children[0].scale.set(1.3, 1.3, 1.3);
+          mesh.children[0].material.opacity = 0.8;
+        } else {
+          mesh.scale.set(1.0, 1.0, 1.0);
+          mesh.material.emissiveIntensity = 0.8;
+          mesh.children[0].scale.set(1.0, 1.0, 1.0);
+          mesh.children[0].material.opacity = 0.25;
+        }
+      });
+
+      // If a node is highlighted, inspect it automatically in the right panel
+      if (step.highlightNodes.length > 0) {
+        const lastHighlightedNodeId = step.highlightNodes[step.highlightNodes.length - 1];
+        const lastNodeMesh = threeNodes.find(m => m.userData.id === lastHighlightedNodeId);
+        if (lastNodeMesh) {
+          // Update panel metadata without sound trigger to avoid sound overlap
+          const data = lastNodeMesh.userData;
+          document.getElementById('inspector-default-msg').style.display = 'none';
+          document.getElementById('inspector-content').style.display = 'block';
+          document.getElementById('insp-name').innerText = data.name;
+          document.getElementById('insp-source').innerText = data.source;
+          document.getElementById('insp-modality').innerText = data.modality;
+          document.getElementById('insp-location').innerText = data.location;
+          document.getElementById('insp-confidence').innerText = data.confidence;
+          document.getElementById('insp-method').innerText = data.method;
+          document.getElementById('insp-body').innerText = data.body;
+          
+          // Canvas preview sync
+          const canvasPreview = document.getElementById('insp-canvas-preview');
+          const canvasBox = document.getElementById('insp-canvas-box');
+          const waveformWidget = document.getElementById('insp-waveform');
+          canvasPreview.style.display = 'none';
+          canvasBox.style.display = 'none';
+          waveformWidget.style.display = 'none';
+
+          if (data.previewType === 'audio') {
+            waveformWidget.style.display = 'flex';
+          } else if (data.previewType === 'canvas' || data.previewType === 'pdf') {
+            canvasPreview.style.display = 'block';
+            const ctx = canvasPreview.getContext('2d');
+            ctx.clearRect(0, 0, canvasPreview.width, canvasPreview.height);
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, canvasPreview.width, canvasPreview.height);
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvasPreview.width; i += 20) {
+              ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvasPreview.height); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvasPreview.width, i); ctx.stroke();
+            }
+
+            if (data.previewType === 'canvas') {
+              ctx.fillStyle = '#00f2fe';
+              ctx.font = 'bold 12px IBM Plex Mono';
+              ctx.fillText('ARCHITECTURE PROPOSAL: SCALE OUT', 10, 25);
+              ctx.strokeStyle = '#00f2fe';
+              ctx.lineWidth = 2;
+              ctx.strokeRect(30, 45, 80, 50);
+              ctx.strokeRect(180, 45, 80, 50);
+              ctx.fillStyle = '#e2e8f0';
+              ctx.font = '8px IBM Plex Mono';
+              ctx.fillText('API GATEWAY', 38, 72);
+              ctx.fillText('POSTGRES DB', 188, 72);
+              ctx.beginPath(); ctx.moveTo(110, 70); ctx.lineTo(180, 70); ctx.stroke();
+              if (data.box) {
+                canvasBox.style.display = 'block';
+                canvasBox.style.left = `${data.box.left}px`;
+                canvasBox.style.top = `${data.box.top}px`;
+                canvasBox.style.width = `${data.box.width}px`;
+                canvasBox.style.height = `${data.box.height}px`;
+              }
+            } else {
+              ctx.fillStyle = '#f5af19';
+              ctx.font = 'bold 12px IBM Plex Mono';
+              ctx.fillText('SYSTEM DESIGN DOCUMENT v2.4', 15, 25);
+              ctx.fillStyle = '#64748b';
+              ctx.fillRect(15, 45, 270, 4);
+              ctx.fillRect(15, 55, 250, 4);
+              ctx.fillRect(15, 65, 260, 4);
+              ctx.fillRect(15, 75, 180, 4);
+            }
+          }
+        }
+      }
+
+      queryStepIdx++;
+      queryTimer = setTimeout(runNextQueryStep, step.duration);
+    }
+
+    // ----------------------------------------------------
+    // THREE.JS ANIMATION LOOP
+    // ----------------------------------------------------
+    function animate(time) {
+      requestAnimationFrame(animate);
+
+      // Rotate scene slowly if camera isn't being dragged
+      if (!isDragging) {
+        cameraRotation.theta += 0.0012;
+        updateCameraPosition();
+      }
+
+      // Rotate node outer rings slightly for dynamic visual texture
+      threeNodes.forEach(mesh => {
+        mesh.rotation.y += 0.01;
+        mesh.rotation.x += 0.005;
+        mesh.children[0].rotation.z += 0.005;
+      });
+
+      // Update and animate particles running along edges
+      particles.forEach(p => {
+        p.t += p.speed;
+        if (p.t > 1.0) {
+          p.t = 0.0; // Loop back
+        }
+        // Interpolate position along relationship edge
+        p.mesh.position.lerpVectors(p.start, p.end, p.t);
+      });
+
+      // Perform Raycast highlights for hover state
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(threeNodes);
+
+      if (intersects.length > 0) {
+        const mesh = intersects[0].object;
+        if (hoveredNode !== mesh) {
+          document.body.style.cursor = 'pointer';
+          hoveredNode = mesh;
+          
+          // Subtle audio feedback on hover
+          if (audioEnabled) {
+            playSynthNote(783.99, 0.06, 'sine', 0.025);
+          }
+
+          // Make the hovered node glow slightly more
+          if (selectedNode !== mesh.userData) {
+            mesh.scale.set(1.2, 1.2, 1.2);
+            mesh.material.emissiveIntensity = 1.4;
+          }
+        }
+      } else {
+        if (hoveredNode) {
+          document.body.style.cursor = 'default';
+          // Restore default size if it was not selected
+          if (selectedNode !== hoveredNode.userData) {
+            hoveredNode.scale.set(1.0, 1.0, 1.0);
+            hoveredNode.material.emissiveIntensity = 0.8;
+          }
+          hoveredNode = null;
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // Initialize 3D scene on DOM load
+    window.addEventListener('DOMContentLoaded', () => {
+      initThree();
+    });
+  </script>
+</body>
+</html>

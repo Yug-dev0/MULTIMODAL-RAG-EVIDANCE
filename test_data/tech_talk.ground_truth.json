@@ -1,0 +1,37 @@
+{
+  "note": "Ground truth for eval authoring/debugging ONLY \u2014 never read by the ingestion pipeline.",
+  "presenter": "Maya Chen",
+  "total_duration_seconds": 79.4,
+  "slides": [
+    {
+      "slide_index": 1,
+      "start_time": 0.0,
+      "end_time": 9.67,
+      "narration_text": "Hi everyone, I'm Maya Chen, staff engineer on the platform team. Today I want to walk you through how we scaled our database layer to handle peak checkout traffic."
+    },
+    {
+      "slide_index": 2,
+      "start_time": 9.67,
+      "end_time": 30.31,
+      "narration_text": "Let's start with the problem. Over the last quarter, our checkout API's p99 latency increased four times over. We traced this back to database overload. Our primary Postgres database was hitting ninety five percent CPU during peak hours, because every single request was hitting the database directly, with no caching in front of it at all."
+    },
+    {
+      "slide_index": 3,
+      "start_time": 30.31,
+      "end_time": 54.43,
+      "narration_text": "To fix this, we proposed a new architecture. We added a Redis cache in front of the database to absorb hot reads, and we added two read replicas to handle reporting and analytics queries. Writes still go to the primary database, and changes replicate asynchronously to the replicas. This diagram shows the full flow, from the app servers through the cache, into the primary database, and out to the replicas."
+    },
+    {
+      "slide_index": 4,
+      "start_time": 54.43,
+      "end_time": 67.79,
+      "narration_text": "After rolling this out, the results were significant. Load on the primary database dropped by seventy percent, p99 latency returned to baseline, and the read replicas are now absorbing almost all of our reporting traffic."
+    },
+    {
+      "slide_index": 5,
+      "start_time": 67.79,
+      "end_time": 79.4,
+      "narration_text": "Looking ahead, our next steps are to finalize the cache invalidation strategy, add monitoring dashboards for cache hit rate, and document an on-call runbook for this new architecture. Thanks everyone."
+    }
+  ]
+}

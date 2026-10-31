@@ -1,0 +1,37 @@
+# Python
+.venv/
+venv/
+**/venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Environment
+.env
+
+# Node
+node_modules/
+dist/
+
+# Databases
+*.db
+db/sqlite/*.db
+db/chroma/
+db/kuzu/
+
+# Application data
+**/data/media/
+data/processed/
+
+# macOS
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo
+
+# Testing / evaluation
+.pytest_cache/
+eval/results/*.json
+eval/results/*.png
+# Playwright MCP browser artifacts (screenshots, snapshots, traces)
+.playwright-mcp/

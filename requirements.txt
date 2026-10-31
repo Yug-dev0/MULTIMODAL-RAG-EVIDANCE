@@ -1,0 +1,39 @@
+# Core
+pydantic>=2.7
+python-dotenv>=1.0
+numpy>=1.26
+pandas>=2.2
+
+# Ingestion
+faster-whisper>=1.0
+scenedetect[opencv]>=0.6.4
+opencv-python-headless>=4.9
+pytesseract>=0.3.10
+pillow>=10.3
+pymupdf>=1.24
+
+# Embeddings / vision
+sentence-transformers>=3.0
+transformers>=4.41
+torch>=2.3
+open_clip_torch>=2.24
+
+# LLM (local via Ollama, default; Gemini optional/hosted fallback)
+ollama>=0.3
+google-genai>=0.3
+
+# Storage
+chromadb>=0.5
+kuzu>=0.4
+
+# API
+fastapi>=0.111
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+
+# Eval / viz
+matplotlib>=3.9
+scikit-learn>=1.5
+
+# Testing
+pytest>=8.2

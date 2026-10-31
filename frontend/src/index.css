@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --c-void: 6 8 13;
+  --c-panel: 21 27 38;
+  --c-panel2: 29 38 52;
+  --c-hairline: 47 58 76;
+  --c-signal: 110 235 195;
+  --c-amber: 245 176 82;
+  --c-ink: 234 238 243;
+  --c-dim: 148 158 173;
+  --grid-line: 110 235 195;
+  --grid-alpha: 0.045;
+}
+
+[data-theme="light"] {
+  --c-void: 244 246 249;
+  --c-panel: 255 255 255;
+  --c-panel2: 237 240 244;
+  --c-hairline: 213 219 228;
+  --c-signal: 8 130 105;
+  --c-amber: 168 92 12;
+  --c-ink: 13 20 28;
+  --c-dim: 82 93 109;
+  --grid-line: 8 130 105;
+  --grid-alpha: 0.05;
+}
+
+@layer base {
+  html {
+    background: rgb(var(--c-void));
+  }
+  body {
+    @apply bg-void text-ink font-sans antialiased transition-colors duration-200;
+    background-image:
+      linear-gradient(rgb(var(--grid-line) / var(--grid-alpha)) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--grid-line) / var(--grid-alpha)) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-attachment: fixed;
+  }
+  ::selection {
+    background: rgb(var(--c-signal) / 0.25);
+  }
+  *:focus-visible {
+    outline: 2px solid rgb(var(--c-signal));
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Corner-bracket "instrument viewport" frame around content panels */
+  .bracket-frame {
+    position: relative;
+  }
+  .bracket-frame::before,
+  .bracket-frame::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-color: rgb(var(--c-signal));
+    opacity: 0.8;
+  }
+  .bracket-frame::before {
+    top: -1px;
+    left: -1px;
+    border-top: 2px solid;
+    border-left: 2px solid;
+  }
+  .bracket-frame::after {
+    bottom: -1px;
+    right: -1px;
+    border-bottom: 2px solid;
+    border-right: 2px solid;
+  }
+
+  .eyebrow {
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-dim;
+  }
+
+  /* Standard elevated card: brighter than the void background with a real
+     border and soft shadow, instead of a near-invisible translucent panel. */
+  .card {
+    @apply rounded-lg border border-hairline bg-panel shadow-[0_1px_0_rgb(255_255_255_/_0.02)_inset,_0_8px_24px_-12px_rgb(0_0_0_/_0.6)];
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

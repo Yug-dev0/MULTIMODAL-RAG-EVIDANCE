@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="author" content="Yug" />
+<meta name="creator" content="Yug" />
+<title>Multimodal RAG-Ready Pipeline</title>
+<style>
+  :root {
+    --bg: #0f1116; --panel: #171a21; --border: #2a2e3a; --text: #e7e9ee;
+    --muted: #9aa2b1; --accent: #6ea8fe; --good: #4caf82; --warn: #d9a441;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, sans-serif; }
+  header { padding: 20px 28px; border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  #stats { display: flex; gap: 18px; flex-wrap: wrap; padding: 10px 28px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
+  #stats b { color: var(--text); }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 28px 60px; }
+  .querybar { display: flex; gap: 10px; margin-bottom: 8px; }
+  input[type=text] { flex: 1; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 14px; }
+  button { padding: 12px 18px; border-radius: 8px; border: none; background: var(--accent); color: #0a0e14; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  label.toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .examples span { font-size: 12px; color: var(--accent); border: 1px solid var(--border); border-radius: 14px; padding: 4px 10px; cursor: pointer; }
+  section.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 18px; }
+  section.panel h2 { margin: 0 0 10px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .answer-text { font-size: 15px; line-height: 1.55; white-space: pre-wrap; }
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .compare-grid .col h3 { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-right: 6px; }
+  .badge.speech { background: #2e3a55; color: #9ec1ff; }
+  .badge.frame, .badge.image { background: #3a2e55; color: #cba4ff; }
+  .badge.ocr { background: #553a2e; color: #ffcf9e; }
+  .badge.doc { background: #2e5540; color: #9effc4; }
+  .cards { display: flex; flex-direction: column; gap: 10px; }
+  .card { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .card .meta { font-size: 11px; color: var(--muted); margin-bottom: 6px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .card .content { font-size: 13.5px; line-height: 1.4; }
+  .card img { max-width: 220px; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); }
+  .conf { color: var(--good); }
+  .conf.low { color: var(--warn); }
+  .event { border-left: 3px solid var(--accent); padding: 8px 12px; margin-bottom: 8px; background: #12151c; border-radius: 0 6px 6px 0; }
+  .event .title { font-weight: 600; font-size: 13.5px; }
+  .event .summary { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .empty { color: var(--muted); font-size: 13px; }
+  .loading { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Multimodal RAG-Ready Pipeline</h1>
+  <p>Query across video, audio, images, and documents — with full provenance back to the original source.</p>
+</header>
+<div id="stats">Loading corpus stats…</div>
+<main>
+  <div class="querybar">
+    <input id="q" type="text" placeholder="e.g. What architecture was discussed for reducing database load, who explained it, and where was the diagram shown?" />
+    <button id="ask">Ask</button>
+  </div>
+  <label class="toggle"><input type="checkbox" id="compareToggle" /> Compare against a naive text-only RAG baseline</label>
+  <div class="examples" id="examples"></div>
+
+  <section class="panel" id="answerPanel" style="display:none">
+    <h2>Answer</h2>
+    <div id="answerBody"></div>
+  </section>
+
+  <section class="panel" id="eventsPanel" style="display:none">
+    <h2>Connected multimodal moments</h2>
+    <div id="eventsBody"></div>
+  </section>
+
+  <section class="panel" id="evidencePanel" style="display:none">
+    <h2>Evidence (ranked, with provenance)</h2>
+    <div class="cards" id="evidenceBody"></div>
+  </section>
+</main>
+
+<script>
+const API = "";
+const EXAMPLE_QUERIES = [
+  "What architecture was discussed for reducing database load, who explained it, and where was the diagram shown?",
+  "How does Memcache reduce load on the primary database?",
+  "What did the paper's figure show about the caching architecture?",
+];
+
+function badgeClass(modality) {
+  if (modality.includes("transcript")) return "speech";
+  if (modality.includes("frame")) return "frame";
+  if (modality.includes("ocr")) return "ocr";
+  if (modality.includes("pdf") || modality.includes("document")) return "doc";
+  return "image";
+}
+
+function fmtTime(t) {
+  if (t === null || t === undefined) return null;
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function isImageModality(m) {
+  return ["video_frame", "image", "pdf_image"].includes(m);
+}
+
+async function loadStats() {
+  const res = await fetch(`${API}/stats`);
+  const data = await res.json();
+  const parts = [`<b>${data.sources.length}</b> sources`, `<b>${data.unit_count}</b> evidence units`, `<b>${data.event_count}</b> multimodal events`];
+  for (const [modality, count] of Object.entries(data.by_modality)) {
+    parts.push(`${escapeHtml(modality)}: <b>${escapeHtml(String(count))}</b>`);
+  }
+  document.getElementById("stats").innerHTML = parts.join(" &nbsp;·&nbsp; ");
+}
+
+function renderEvidenceCard(unit) {
+  const time = fmtTime(unit.start_time);
+  const modality = escapeHtml(unit.modality);
+  const metaParts = [`<span class="badge ${badgeClass(unit.modality)}">${modality}</span>`, escapeHtml(unit.source_file)];
+  if (time !== null) metaParts.push(`t=${escapeHtml(time)}`);
+  if (unit.page_number) metaParts.push(`page ${escapeHtml(String(unit.page_number))}`);
+  const confClass = unit.confidence < 0.5 ? "low" : "";
+  metaParts.push(`<span class="conf ${confClass}">conf ${unit.confidence.toFixed(2)}</span>`);
+
+  let img = "";
+  if (isImageModality(unit.modality) && unit.asset_path) {
+    img = `<img src="/asset?path=${encodeURIComponent(unit.asset_path)}" onerror="this.style.display='none'" />`;
+  }
+  return `<div class="card"><div class="meta">${metaParts.join(" &nbsp;·&nbsp; ")}</div>
+    <div class="content">${escapeHtml(unit.content)}</div>${img}</div>`;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.innerText = s;
+  return d.innerHTML;
+}
+
+async function ask() {
+  const query = document.getElementById("q").value.trim();
+  if (!query) return;
+  const compare = document.getElementById("compareToggle").checked;
+  const askBtn = document.getElementById("ask");
+  askBtn.disabled = true;
+  askBtn.textContent = "Thinking…";
+
+  document.getElementById("answerPanel").style.display = "block";
+  document.getElementById("answerBody").innerHTML = '<div class="loading">Running hybrid retrieval…</div>';
+  document.getElementById("eventsPanel").style.display = "none";
+  document.getElementById("evidencePanel").style.display = "none";
+
+  try {
+    const endpoint = compare ? "/compare" : "/query";
+    const res = await fetch(`${API}${endpoint}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }),
+    });
+    const data = await res.json();
+    const result = compare ? data.multimodal : data;
+
+    if (compare) {
+      document.getElementById("answerBody").innerHTML = `
+        <div class="compare-grid">
+          <div class="col"><h3>Multimodal system (this project)</h3><div class="answer-text">${escapeHtml(result.answer)}</div></div>
+          <div class="col"><h3>Naive text-only RAG baseline</h3><div class="answer-text">${escapeHtml(data.baseline.answer)}</div></div>
+        </div>`;
+    } else {
+      document.getElementById("answerBody").innerHTML = `<div class="answer-text">${escapeHtml(result.answer)}</div>`;
+    }
+
+    const events = result.events || [];
+    if (events.length) {
+      document.getElementById("eventsPanel").style.display = "block";
+      document.getElementById("eventsBody").innerHTML = events.map(e => `
+        <div class="event"><div class="title">${escapeHtml(e.title)}</div>
+        <div class="summary">${escapeHtml(e.summary)} — spans ${escapeHtml(e.modalities.join(", "))} across ${escapeHtml(e.source_files.join(", "))}</div></div>
+      `).join("");
+    }
+
+    const evidence = result.evidence || [];
+    document.getElementById("evidencePanel").style.display = "block";
+    document.getElementById("evidenceBody").innerHTML = evidence.length
+      ? evidence.map(renderEvidenceCard).join("")
+      : '<div class="empty">No evidence retrieved.</div>';
+  } catch (e) {
+    document.getElementById("answerBody").innerHTML = `<div class="empty">Request failed: ${escapeHtml(String(e))}</div>`;
+  } finally {
+    askBtn.disabled = false;
+    askBtn.textContent = "Ask";
+  }
+}
+
+document.getElementById("ask").addEventListener("click", ask);
+document.getElementById("q").addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+document.getElementById("examples").innerHTML = EXAMPLE_QUERIES.map(q => `<span>${escapeHtml(q)}</span>`).join("");
+document.querySelectorAll("#examples span").forEach((el, i) => {
+  el.addEventListener("click", () => { document.getElementById("q").value = EXAMPLE_QUERIES[i]; ask(); });
+});
+
+loadStats();
+</script>
+</body>
+</html>
